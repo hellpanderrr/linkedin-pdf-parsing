@@ -34,6 +34,17 @@ c.execute('''CREATE TABLE Degree
 
 conn.commit()
 
+conn = sqlite3.connect('ex5.db')
+c = conn.cursor()
+def check_exists(table,column,row_value,c):
+        print (table,column,row_value)
+        data = c.execute("SELECT * FROM ? WHERE ? = ?", (table,column,row_value)).fetchone()
+        if data is None:
+            c.execute("INSERT INTO ? VALUES (NULL,?)" , [table,row_value])
+            dataId = c.lastrowid
+        else:
+            dataId = data[0]
+        return dataId
 def parse_date(dates):
     ret = {'from_month':'','from_year':'','to_month':'','to_year':''}
    
@@ -88,9 +99,10 @@ def get_objects(layout):
     return objs
 
 def get_data(objs,name):
-    #get objects from 'name' section
+    """Collects objects from a header with 'name' in it.
+    Takes list of LTObjects, returns list of LTObjects   
+    """    
     ed_st = ed_en = 0
-
     for idx,obj in enumerate(objs):
         if isinstance(obj,LTTextLineHorizontal) and name in obj.get_text() and not ed_st:
             ed_st = idx
@@ -111,7 +123,7 @@ def get_name(objs):
                         break
     return name.encode('utf-8')
 def get_experience_info(objs):
-    """Collects companies' names and dates, returns a 
+    """Collects companies' names and dates, takes list of LTObjects, returns a 
     list: [title,company,{'from_month':'','from_year':'','to_month':'','to_year':''}]
     """
     ret= []
@@ -129,6 +141,7 @@ def get_experience_info(objs):
 def get_education_info(objs):
     #collect schools and dates
     ret= []
+    degree = major = dates = school = ''
     for idx,obj in enumerate(objs):
          if  get_chars(obj)[0].size > 13.4:
                 try:
@@ -136,7 +149,18 @@ def get_education_info(objs):
                 except Exception,e:
                     print e
                     next_object = ''
-                ret.append([obj.get_text(),next_object])            
+                school = obj.get_text()
+                if next_object:
+                    second_line = next_object.split(',')
+                    if len(second_line) == 3:
+                        degree = second_line[0].strip()
+                        major  = ' '.join(second_line[1:-1]).strip()
+                        dates  = parse_date(second_line[-1])
+                else:
+                    degree = major = ''
+                    dates = {'from_month':'','from_year':'','to_month':'','to_year':''}
+                    
+                ret.append([school,degree,major,dates])            
     return ret
 
 
@@ -154,12 +178,11 @@ for j in getfilelist('G:\\yc_founder_bios','.pdf'):
     # Create a PDF resource manager object that stores shared resources.
     rsrcmgr = PDFResourceManager()
     # Create a PDF device object.
-
     laparams = LAParams()
     # Create a PDF page aggregator object.
     device = PDFPageAggregator(rsrcmgr, laparams=laparams)
     interpreter = PDFPageInterpreter(rsrcmgr, device)
-    objs =[]
+    objs = []
     for page in PDFPage.create_pages(document):
         interpreter.process_page(page)
         # receive the LTPage object for the page.
@@ -169,37 +192,37 @@ for j in getfilelist('G:\\yc_founder_bios','.pdf'):
     objs = sum(objs,[]) #flattening to 1D array
     exp = get_data(objs,'Experience')
     ed  = get_data(objs,'Education')
-   # with open(''.join(j.split('.')[:-1])+'.txt','wb') as f:
-        #f.write(get_name(objs)+'\n')
-        
-        ## f.write( ''.join(sum(get_experience_info(exp),[])).encode('utf-8')  )
-      #  f.write('\n******EDUCATION******'+'\n')
-       # f.write( ''.join(sum(get_education_info(ed),[]) ) .encode('utf-8')  )
-        #f.write( ''.join([i.get_text() for i in objs[ed[0]:ed[1]]]).encode('utf-8')  )
-    c.execute("INSERT INTO Person VALUES (NULL,'%s')" % get_name(objs))
-    exp_row = [c.lastrowid,'company','title','start','end','ongoing']
-    ed_row = [c.lastrowid,'Degree','School','Major','start','end','ongoing']
+    person = c.execute('SELECT * FROM Person WHERE Name=?', [get_name(objs).decode('utf8')]).fetchone()
+    if not person:
+        c.execute("INSERT INTO Person VALUES (NULL,?)" , [get_name(objs).decode('utf8')])
+        personId = c.lastrowid
+    else:
+        personId = person[0]
+    exp_row = [personId,'company','title','start','end','ongoing']
+    ed_row = [personId,'Degree','School','Major','start','end','ongoing']
     for place in get_experience_info(exp):
-        
-        c.execute("INSERT INTO Company VALUES (NULL,'%s')" % place[1])  
-        exp_row[1] = c.lastrowid
-        c.execute("INSERT INTO Title VALUES (NULL,'%s')" % place[0]) 
-        exp_row[2] = c.lastrowid
+        exp_row[1] = check_exists('Company','CompanyName',place[1],c)       
+        exp_row[2] = check_exists('Title','Title',place[0],c)
         exp_row[3] = place[2]['from_year']
         exp_row[4] = place[2]['to_year']
-        exp_row[5] = 1 if exp_row[5] == 'Present' else 0
+        exp_row[5] = 1 if exp_row[4] == 'Present' else 0
         c.execute("INSERT INTO Experience VALUES (NULL,?,?,?,?,?,?)" , exp_row) 
         #cursor.lastrowid
     for place in get_education_info(ed):
-        
-        c.execute("INSERT INTO School VALUES (NULL,'%s')" % place[1])  
-        exp_row[2] = c.lastrowid
-        c.execute("INSERT INTO Title VALUES (NULL,'%s')" % place[0]) 
-        exp_row[3] = c.lastrowid
-        exp_row[4] = place[2]['from_year']
-        exp_row[5] = place[2]['to_year']
-        exp_row[6] = 1 if exp_row[5] == 'Present' else 0
-        c.execute("INSERT INTO Experience VALUES (NULL,?,?,?,?,?,?)" , exp_row) 
+        ed_row[1:] = ['']*6
+        if place[1]:
+            c.execute("INSERT INTO Degree VALUES (NULL,?)" , [place[1]]) 
+            ed_row[1] = c.lastrowid                    
+        if place[0]:
+            c.execute("INSERT INTO School VALUES (NULL,?)" , [place[0]]) 
+            ed_row[2] = c.lastrowid        
+        if place[2]:
+            c.execute("INSERT INTO Major VALUES (NULL,?)" , [place[2]])
+            ed_row[3] = c.lastrowid
+        ed_row[4] = place[3]['from_year']
+        ed_row[5] = place[3]['to_year']
+        ed_row[6] = 1 if exp_row[5] == 'Present' else 0
+        c.execute("INSERT INTO Education VALUES (NULL,?,?,?,?,?,?,?)" , ed_row) 
         #cursor.lastrowid
     print j ,len(objs),get_name(objs),exp,ed
 conn.commit()
