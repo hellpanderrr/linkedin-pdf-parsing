@@ -34,32 +34,29 @@ c.execute('''CREATE TABLE Degree
 
 conn.commit()
 
-conn = sqlite3.connect('ex5.db')
+conn = sqlite3.connect('ex6.db')
 c = conn.cursor()
-def check_exists(table,column,row_value,c):
-        print (table,column,row_value)
-        data = c.execute("SELECT * FROM ? WHERE ? = ?", (table,column,row_value)).fetchone()
+def insert(table,column,row_value,c):
+         """Checks if a row with 'value' exists in a 'column' of a 'table' using database cursor 'c', if so it returns an Id of 
+         first matching row, otherwise it inserts a new row and returns it's id
+         """
+        data = c.execute("SELECT * FROM {} WHERE {} = ?".format(table,column), [row_value]).fetchone()
         if data is None:
-            c.execute("INSERT INTO ? VALUES (NULL,?)" , [table,row_value])
+            c.execute("INSERT INTO {} VALUES (NULL,?)".format(table) , [row_value])
             dataId = c.lastrowid
         else:
             dataId = data[0]
         return dataId
 def parse_date(dates):
+    """Parses a string with the dates in it,
+    take string, returns a dictionary: {'from_month':'','from_year':'','to_month':'','to_year':''}
+    """
     ret = {'from_month':'','from_year':'','to_month':'','to_year':''}
-   
+    
     dates = dates.strip().split('-')
-    #print dates
-    if len(dates) == 1:
-         date = dates.strip().split(' ')
-         if len(date) == 1:
-                ret =  ['','','',date]
-         elif len(date) == 2:
-                ret =  [date[0],date[1]]
-    elif len(dates) == 2:
-       
-        date_from = dates[0].strip().split(' ')
-        
+
+    if len(dates) == 2:      
+        date_from = dates[0].strip().split(' ')        
         date_to   = dates[1].strip().split(' ')
         if len(date_from) == 1:
              ret['from_month'] = ''
@@ -73,20 +70,20 @@ def parse_date(dates):
         elif len(date_to) == 2:
              ret['to_month'] = date_to[0]
              ret['to_year']  = date_to[1]
-        
+
     return ret
 def get_chars(line,with_anno=True):
     #get chars from the LTTextline
-    ret=[]
+    ret = []
     for char in line:
         if with_anno:
             ret.append(char)
-        elif not with_anno and type(char)<> pdfminer.layout.LTAnno:
+        elif not with_anno and type(char) <> pdfminer.layout.LTAnno:
             ret.append(char)
     return ret
 isiterable = lambda obj: isinstance(obj, basestring) or getattr(obj, '__iter__', False)
 def get_objects(layout):
-    #collecting all objects from the layout
+    #collecting all objects from the layout, 1 level depth
     objs = []
     for obj in layout:
 
@@ -95,16 +92,16 @@ def get_objects(layout):
                 objs.append(element)
         else:
             objs.append(obj)
-            #print (i)
     return objs
 
 def get_data(objs,name):
     """Collects objects from a header with 'name' in it.
     Takes list of LTObjects, returns list of LTObjects   
     """    
+    FONTSIZE = 17 #heading's font size is 17.85
     ed_st = ed_en = 0
     for idx,obj in enumerate(objs):
-        if isinstance(obj,LTTextLineHorizontal) and name in obj.get_text() and not ed_st:
+        if isinstance(obj,LTTextLineHorizontal) and name in obj.get_text() and get_chars(obj)[0].size > FONTSIZE and not ed_st:
             ed_st = idx
         if isinstance(obj,LTLine) and ed_st and not ed_en:
             ed_en = idx           
@@ -112,7 +109,9 @@ def get_data(objs,name):
 
 
 def get_name(objs):
-    #get person's name
+    """Collects persons' names, takes a list of LTObjects, returns a 
+    list: [name,surname]
+    """
     name =''
     for obj in objs:
         if isinstance(obj, LTTextLine):
@@ -121,41 +120,57 @@ def get_name(objs):
                     if char.size>23:
                         name = obj.get_text()
                         break
-    return name.encode('utf-8')
+    name = name.encode('utf-8').strip().split(' ')
+    
+    return [name[0], len(name)>1 and ' '.join(name[1:])]
 def get_experience_info(objs):
-    """Collects companies' names and dates, takes list of LTObjects, returns a 
+    """Collects companies' names,titles and dates, takes list of LTObjects, returns a 
     list: [title,company,{'from_month':'','from_year':'','to_month':'','to_year':''}]
     """
+    FONTSIZE = 13.4 #fontsize of bold headers
     ret= []
     company = title = ''
     for idx,obj in enumerate(objs):
-         if idx>0 and get_chars(objs[idx-1])[0].size > 13.4:
+        company = title = ''
+        if idx>0 and get_chars(objs[idx-1])[0].size > FONTSIZE:
                 brackets = re.search('([(]+(.)*[)]+)',obj.get_text())
+                #print brackets
                 if brackets:
-                    header = objs[idx-1].get_text().split('at')
+                    header = objs[idx-1].get_text().split(' at ')
                     if len(header) == 2:
                         company = header[1].strip()
                         title   = header[0].strip()
                     ret.append([title,company,parse_date(obj.get_text()[:brackets.start()])]) 
     return ret
 def get_education_info(objs):
+    """Collects schools,majors,dates, takes a list of LTObjects, returns a 
+    list: [school,degree,major,{'from_month':'','from_year':'','to_month':'','to_year':''}]
+    """
     #collect schools and dates
-    ret= []
+    FONTSIZE = 13.4 #fontsize of bold headers
+    ret = []
     degree = major = dates = school = ''
     for idx,obj in enumerate(objs):
-         if  get_chars(obj)[0].size > 13.4:
+         if  get_chars(obj)[0].size > FONTSIZE:
                 try:
                     next_object = objs[idx+1].get_text()
                 except Exception,e:
                     print e
                     next_object = ''
                 school = obj.get_text()
+                print next_object
                 if next_object:
                     second_line = next_object.split(',')
-                    if len(second_line) == 3:
+                    if len(second_line) >= 3:
                         degree = second_line[0].strip()
                         major  = ' '.join(second_line[1:-1]).strip()
                         dates  = parse_date(second_line[-1])
+                    elif len(second_line) == 1:
+                        dates = parse_date(second_line[0])
+                    elif len(second_line) == 2:
+                        major = second_line[0]
+                        dates = parse_date(second_line[1])
+                        
                 else:
                     degree = major = ''
                     dates = {'from_month':'','from_year':'','to_month':'','to_year':''}
@@ -165,12 +180,11 @@ def get_education_info(objs):
 
 
 for j in getfilelist('G:\\yc_founder_bios','.pdf'):
-    if not j.endswith('Siegel.pdf'): continue
+    #if not j.endswith('ReidRubsamen, M.D..pdf'): continue
     fp = open(j, 'rb')
     # Create a PDF parser object associated with the file object.
     parser = PDFParser(fp)
     # Create a PDF document object that stores the document structure.
-    # Supply the password for initialization.
     document = PDFDocument(parser)
     # Check if the document allows text extraction. If not, abort.
     if not document.is_extractable:
@@ -190,40 +204,48 @@ for j in getfilelist('G:\\yc_founder_bios','.pdf'):
         # collecting objects from the all pages, sorting them by their Y coordinate
         objs.append( sorted( get_objects(layout),key=lambda x:x.y0,reverse=True)     )
     objs = sum(objs,[]) #flattening to 1D array
-    exp = get_data(objs,'Experience')
-    ed  = get_data(objs,'Education')
-    person = c.execute('SELECT * FROM Person WHERE Name=?', [get_name(objs).decode('utf8')]).fetchone()
+    #getting objects from the corresponding sections
+    exp = get_data(objs,'Experience') 
+    ed  = get_data(objs,'Education')  
+    name =  get_name(objs)[0].decode('utf8')
+    surname =  get_name(objs)[1].decode('utf8')
+    
+    person = c.execute('SELECT * FROM Person WHERE Name=? and Surname=?', [name,surname]).fetchone()
     if not person:
-        c.execute("INSERT INTO Person VALUES (NULL,?)" , [get_name(objs).decode('utf8')])
+        c.execute("INSERT INTO Person VALUES (NULL,?,?)" , [name,surname])
         personId = c.lastrowid
     else:
         personId = person[0]
-    exp_row = [personId,'company','title','start','end','ongoing']
-    ed_row = [personId,'Degree','School','Major','start','end','ongoing']
-    for place in get_experience_info(exp):
-        exp_row[1] = check_exists('Company','CompanyName',place[1],c)       
-        exp_row[2] = check_exists('Title','Title',place[0],c)
-        exp_row[3] = place[2]['from_year']
-        exp_row[4] = place[2]['to_year']
-        exp_row[5] = 1 if exp_row[4] == 'Present' else 0
-        c.execute("INSERT INTO Experience VALUES (NULL,?,?,?,?,?,?)" , exp_row) 
-        #cursor.lastrowid
+        
+    exp_row = OrderedDict([('personId',personId),('company',''),('title',''),\
+                           ('from_month',''),('from_year',''),('to_month',''),('to_year',''),('ongoing','')])
+    ed_row = OrderedDict([('personId',personId),('Degree',''),('School',''),('Major',''),\
+                           ('from_month',''),('from_year',''),('to_month',''),('to_year',''),('ongoing','')])
+    for place in get_experience_info(exp):  
+        for key in exp_row:
+            if key <> 'personId':
+                exp_row[key] = ''
+        exp_row['company']    = place[1].strip() and insert('Company','CompanyName',place[1],c)       
+        exp_row['title']      = place[0].strip() and insert('Title','Title',place[0],c)
+        exp_row['from_month'] = place[2]['from_month'] if 'from_month' in place[2] else ''
+        exp_row['from_year']  = place[2]['from_year'] if 'from_year' in place[2] else ''
+        exp_row['to_month']   = place[2]['to_month'] if 'to_month' in place[2] else '' 
+        exp_row['to_year']    = place[2]['to_year'] if 'to_year' in place[2] else ''
+        exp_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
+        c.execute("INSERT INTO Experience VALUES (NULL,?,?,?,?,?,?,?,?)" , exp_row.values()) 
     for place in get_education_info(ed):
-        ed_row[1:] = ['']*6
-        if place[1]:
-            c.execute("INSERT INTO Degree VALUES (NULL,?)" , [place[1]]) 
-            ed_row[1] = c.lastrowid                    
-        if place[0]:
-            c.execute("INSERT INTO School VALUES (NULL,?)" , [place[0]]) 
-            ed_row[2] = c.lastrowid        
-        if place[2]:
-            c.execute("INSERT INTO Major VALUES (NULL,?)" , [place[2]])
-            ed_row[3] = c.lastrowid
-        ed_row[4] = place[3]['from_year']
-        ed_row[5] = place[3]['to_year']
-        ed_row[6] = 1 if exp_row[5] == 'Present' else 0
-        c.execute("INSERT INTO Education VALUES (NULL,?,?,?,?,?,?,?)" , ed_row) 
-        #cursor.lastrowid
-    print j ,len(objs),get_name(objs),exp,ed
+        for key in ed_row:
+            if key <> 'personId':
+                ed_row[key] = ''
+        ed_row['Degree']     = place[1].strip() and insert('Degree','Degree', place[1],c)
+        ed_row['School']     = place[0].strip() and insert('School','School', place[0],c)
+        ed_row['Major']      = place[2].strip() and insert('Major','Major', place[2],c)
+        ed_row['from_month'] = place[3]['from_month'] if 'from_month' in place[3] else ''
+        ed_row['from_year']  = place[3]['from_year'] if 'from_year' in place[3] else ''
+        ed_row['to_month']   = place[3]['to_month'] if 'to_month' in place[2] else '' 
+        ed_row['to_year']    = place[3]['to_year'] if 'to_year' in place[3] else '' 
+        ed_row['ongoing']    = 1 if exp_row['to_year'] == 'Present' else 0
+        c.execute("INSERT INTO Education VALUES (NULL,?,?,?,?,?,?,?,?,?)" , ed_row.values()) 
+    print get_name(objs)
 conn.commit()
 conn.close()
