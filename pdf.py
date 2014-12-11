@@ -34,8 +34,6 @@ c.execute('''CREATE TABLE Degree
 
 conn.commit()
 
-conn = sqlite3.connect('ex6.db')
-c = conn.cursor()
 def insert(table,column,row_value,c):
          """Checks if a row with 'value' exists in a 'column' of a 'table' using database cursor 'c', if so it returns an Id of 
          first matching row, otherwise it inserts a new row and returns it's id
