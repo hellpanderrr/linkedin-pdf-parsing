@@ -34,6 +34,14 @@ c.execute('''CREATE TABLE Degree
 
 conn.commit()
 
+def getfilelist(path, extension=None):
+    filenames = []
+    for i in os.walk(path.decode('utf-8')).next()[2]:
+            if (extension):
+                if os.path.splitext(i)[1] == extension :
+                    filenames.append(path+'\\'+i)
+            else:            
+                filenames.append(path+'\\'+i)
 def insert(table,column,row_value,c):
          """Checks if a row with 'value' exists in a 'column' of a 'table' using database cursor 'c', if so it returns an Id of 
          first matching row, otherwise it inserts a new row and returns it's id
