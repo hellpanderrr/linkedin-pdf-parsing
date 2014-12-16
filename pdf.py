@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 import os
 import re
 import sqlite3
@@ -13,7 +14,8 @@ from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTFigure, LTImage,LTTextLineHorizontal,LTChar,LTLine,LTText
 import argparse
 import sys
-
+import glob
+from collections import OrderedDict
 
 def main(argv):
     def create_database(output_folder):
@@ -47,14 +49,16 @@ def main(argv):
         return conn
 
     def getfilelist(path, extension=None):
-        filenames=[]
+        filenames = []
         for i in os.walk(path.decode('utf-8')).next()[2]:
                 if (extension):
-                    if os.path.splitext(i)[1]==extension :
-                        #print i,'\n'
-                        filenames.append(path+'\\'+i)
+                    if i.endswith(extension):
+                        #print os.path.join(path,i)
+                        filenames.append(os.path.join(path,i))
                 else:            
-                    filenames.append(path+'\\'+i)
+                    filenames.append(os.path.join(path,i))
+	return filenames
+
     def insert(table,column,row_value,c):
             """Checks if a row with 'value' exists in a 'column' of a 'table' using database cursor 'c', if so it returns an Id of 
             first matching row, otherwise it inserts a new row and returns it's id
@@ -178,7 +182,7 @@ def main(argv):
                         print e
                         next_object = ''
                     school = obj.get_text()
-                    print next_object
+                    #print next_object
                     if next_object:
                         second_line = next_object.split(',')
                         if len(second_line) >= 3:
@@ -200,14 +204,17 @@ def main(argv):
     output_file = os.path.abspath(argv.output)
     input_folder  = os.path.abspath(argv.input)
     print 'Input folder: %s, output file: %s ' % (input_folder,output_file)
-    create_database(output_file).commit()
+    conn = create_database(output_file)
+    conn.commit()
+    c = conn.cursor()
     filelist = getfilelist(input_folder,'.pdf')
     if not filelist:
         print 'No pdf files found in the provided folder.'
         sys.exit(2)
     for f in filelist:
+#print f
         #if not j.endswith('ReidRubsamen, M.D..pdf'): continue
-        fp = open(f, 'rb')
+        fp = open(f.encode('utf-8'), 'rb')
         # Create a PDF parser object associated with the file object.
         parser = PDFParser(fp)
         # Create a PDF document object that stores the document structure.
