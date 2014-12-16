@@ -2,6 +2,10 @@
 import os
 import re
 import sqlite3
+import argparse
+import sys
+import glob
+from collections import OrderedDict
 from pdfminer.pdfparser import PDFParser
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfpage import PDFPage
@@ -12,10 +16,7 @@ from pdfminer.pdfdevice import PDFDevice
 from pdfminer.layout import LAParams
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTFigure, LTImage,LTTextLineHorizontal,LTChar,LTLine,LTText
-import argparse
-import sys
-import glob
-from collections import OrderedDict
+
 
 def main(argv):
     def create_database(output_folder):
@@ -214,7 +215,7 @@ def main(argv):
     for f in filelist:
 #print f
         #if not j.endswith('ReidRubsamen, M.D..pdf'): continue
-        fp = open(f.encode('utf-8'), 'rb')
+        fp = open(f, 'rb')
         # Create a PDF parser object associated with the file object.
         parser = PDFParser(fp)
         # Create a PDF document object that stores the document structure.
