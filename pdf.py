@@ -20,9 +20,10 @@ from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTFigure, LTImage,L
 
 def main(argv):
     def create_database(output_folder):
+        if not os.path.exists(os.path.split(output_folder)[0]):
+            os.makedirs(os.path.split(output_folder)[0])    
         conn = sqlite3.connect(os.path.abspath(output_folder))
         c = conn.cursor()
-        
         c.execute('DROP TABLE IF EXISTS Title')
         c.execute('''CREATE TABLE Title
                      (TitleId integer primary key not null,Title varchar)''')
