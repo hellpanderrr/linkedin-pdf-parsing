@@ -200,7 +200,7 @@ def main(argv):
     output_file = os.path.abspath(argv.output)
     input_folder  = os.path.abspath(argv.input)
     print 'Input folder: %s, output file: %s ' % (input_folder,output_file)
-    create_database(output_folder).commit()
+    create_database(output_file).commit()
     filelist = getfilelist(input_folder,'.pdf')
     if not filelist:
         print 'No pdf files found in the provided folder.'
